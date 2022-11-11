@@ -28,9 +28,20 @@ def convert_dict(d: dict, typeof: str):
             first_name=d["first_name"] if "first_name" in d else None,
             last_name=d["last_name"] if "last_name" in d else None
         )
+    elif typeof == "callback_query":
+        return CallbackQuery(
+            id=d["id"],
+            from_user=d["from"],  # class User
+            chat_instance=d["chat_instance"],
+            message=convert_dict(d["message"], "message") if "message" in d else None,
+            inline_message_id=d["inline_message_id"] if "inline_message_id" in d else None,
+            data=d["data"] if "data" in d else None,
+            game_short_name=d["game_short_name"] if "game_short_name" in d else None,
+        )
+    return d
 
 
-class Handlers(Enum):
+class Handlers():
     onMessage = "onMessage"
     onEditedMessage = "onEditedMessage"
     onEditedChannelPost = "onEditedChannelPost"
@@ -104,3 +115,22 @@ class Message(BaseType):
         self.text = text
         self.reply_markup = reply_markup
 
+
+class CallbackQuery(BaseType):
+    def __init__(
+            self,
+            id: str,
+            from_user: dict, # class User
+            chat_instance: str,
+            message: Union[Message, None] = None,
+            inline_message_id: Union[str, None] = None,
+            data: Union[str, None] = None,
+            game_short_name: Union[str, None] = None
+    ):
+        self.id = id
+        self.from_user = from_user
+        self.chat_instance = chat_instance
+        self.message = message
+        self.inline_message_id = inline_message_id
+        self.data = data
+        self.game_short_name = game_short_name

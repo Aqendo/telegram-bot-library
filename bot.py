@@ -1,8 +1,9 @@
 import aiohttp
 import asyncio
 import logging
-from typing import Union
-from .types import convert_dict, Message
+from typing import Union, List
+from .types import convert_dict
+
 
 class Poller:
     def __init__(self, token, queue: asyncio.Queue, session, api_url: Union[str, None] = "api.telegram.org"):
@@ -88,7 +89,7 @@ class Bot:
             elif "chosen_inline_result" in update:
                 tasks.append(self.onChosenInlineResult(update["chosen_inline_result"]))
             elif "callback_query" in update:
-                tasks.append(self.onCallbackQuery(update["callback_query"]))
+                tasks.append(self.onCallbackQuery(convert_dict(update["callback_query"], "callback_query")))
             else:
                 logging.error("Unknown update type: %s" % list(update.keys())[1])
             await asyncio.gather(*tasks)
@@ -165,3 +166,59 @@ class Bot:
             "sendMessage",
             payload
         )
+
+    async def answer_callback_query(
+            self,
+            callback_query_id: str,
+            text: Union[str, None] = None,
+            show_alert: Union[bool, None] = None,
+            url: Union[str, None] = None,
+            cache_time: Union[int, None] = None
+    ):
+        payload = {"callback_query_id": callback_query_id}
+        if text is not None:
+            payload["text"] = text
+        if show_alert is not None:
+            payload["show_alert"] = show_alert
+        if url is not None:
+            payload["url"] = url
+        if cache_time is not None:
+            payload["cache_time"] = cache_time
+        await self.make_request(
+            "answerCallbackQuery",
+            payload
+        )
+
+    async def edit_message_text(
+            self,
+            text: str,
+            chat_id: Union[int, str, None] = None,
+            message_id: Union[int, None] = None,
+            inline_message_id: Union[int, None] = None,
+            parse_mode: Union[str, None] = None,
+            entities: Union[List, None] = None,
+            disable_web_page_preview: Union[bool, None] = None,
+            reply_markup: Union[dict, None] = None
+    ):
+        payload = {
+            "text": text
+        }
+        if chat_id is not None:
+            payload["chat_id"] = chat_id
+        if message_id is not None:
+            payload["message_id"] = message_id
+        if inline_message_id is not None:
+            payload["inline_message_id"] = inline_message_id
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
+        if entities is not None:
+            payload["entities"] = entities
+        if disable_web_page_preview is not None:
+            payload["disable_web_page_preview"] = disable_web_page_preview
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        await self.make_request(
+            "editMessageText",
+            payload
+        )
+

@@ -1,7 +1,8 @@
 import aiohttp
 import asyncio
+import logging
 from typing import Union
-
+from .types import convert_dict, Message
 
 class Poller:
     def __init__(self, token, queue: asyncio.Queue, session, api_url: Union[str, None] = "api.telegram.org"):
@@ -13,7 +14,7 @@ class Poller:
     async def make_request(self, method, data):
         async with self.session.post(self.api_url + self.token + "/" + method, data=data) as post:
             a = await post.json()
-            print(a)
+            logging.debug(a)
             return a
 
     async def _worker(self):
@@ -51,17 +52,19 @@ class Worker:
 class Bot:
     def __init__(self, token: str, n: int, api_url: Union[str, None] = "api.telegram.org"):
         self.queue = asyncio.Queue()
+        if not isinstance(token, str) or len(token) == 0:
+            raise ValueError("A valid token must be provided.")
         self.token = token
         self.session: aiohttp.ClientSession = aiohttp.ClientSession()
         self.poller = Poller(token, self.queue, self.session)
         self.worker = Worker(token, self.queue, n, self.session, self._handle_update)
         self.api_url = "https://" + api_url + "/bot"
 
+    # this function is a decorator, that's why it is so strange
     def register(self, method):
         def a(func, preserved=self):
             setattr(preserved, method, func)
             return func
-
         return a
 
     async def _handle_update(self, update: dict):
@@ -69,17 +72,17 @@ class Bot:
             tasks = []
             if "message" in update:
                 print(update)
-                tasks.append(self.onMessage(update["message"]))
-                tasks.append(self.onMessageOnly(update["message"]))
+                tasks.append(self.onMessage(convert_dict(update["message"], "message")))
+                tasks.append(self.onMessageOnly(convert_dict(update["message"], "message")))
             elif "edited_message" in update:
-                tasks.append(self.onMessage(update["edited_message"]))
-                tasks.append(self.onEditedMessage(update["edited_message"]))
+                tasks.append(self.onMessage(convert_dict(update["edited_message"], "message")))
+                tasks.append(self.onEditedMessage(convert_dict(update["edited_message"], "message")))
             elif "channel_post" in update:
-                tasks.append(self.onMessage(update["channel_post"]))
-                tasks.append(self.onChannelPost(update["channel_post"]))
+                tasks.append(self.onMessage(convert_dict(update["channel_post"], "message")))
+                tasks.append(self.onChannelPost(convert_dict(update["channel_post"], "message")))
             elif "edited_channel_post" in update:
-                tasks.append(self.onMessage(update["edited_channel_post"]))
-                tasks.append(self.onEditedChannelPost(update["edited_channel_post"]))
+                tasks.append(self.onMessage(convert_dict(update["edited_channel_post"], "message")))
+                tasks.append(self.onEditedChannelPost(convert_dict(update["edited_channel_post"], "message")))
             elif "inline_query" in update:
                 tasks.append(self.onInlineQuery(update["inline_query"]))
             elif "chosen_inline_result" in update:
@@ -87,7 +90,7 @@ class Bot:
             elif "callback_query" in update:
                 tasks.append(self.onCallbackQuery(update["callback_query"]))
             else:
-                raise NotImplemented
+                logging.error("Unknown update type: %s" % list(update.keys())[1])
             await asyncio.gather(*tasks)
         except Exception as e:
             print("ERROR: ", e)
@@ -138,8 +141,27 @@ class Bot:
         await self.poller.start()
         await self.worker.start()
 
+    def activate(self):
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.start())
+        try:
+            loop.run_forever()
+        except Exception:  # just any
+            loop.stop()
+
     async def make_request(self, method, data):
         async with self.session.post(self.api_url + self.token + "/" + method, data=data) as post:
             a = await post.json()
             print(a)
             return a
+
+    async def send_message(self, chat_id: int, text: str, extra: dict = {}):
+        payload = {
+            "chat_id": chat_id,
+            "text": text
+        }
+        payload |= extra
+        await self.make_request(
+            "sendMessage",
+            payload
+        )

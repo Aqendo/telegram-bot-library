@@ -1,6 +1,8 @@
 import aiohttp
 import asyncio
 import logging
+import traceback
+import json
 from typing import Union, List
 from .types import convert_dict
 
@@ -51,12 +53,16 @@ class Worker:
 
 
 class Bot:
-    def __init__(self, token: str, n: int, api_url: Union[str, None] = "api.telegram.org"):
+    def __init__(self, token: str, n: int, api_url: Union[str, None] = "api.telegram.org", skip_updates: bool = True):
         self.queue = asyncio.Queue()
         if not isinstance(token, str) or len(token) == 0:
             raise ValueError("A valid token must be provided.")
         self.token = token
-        self.session: aiohttp.ClientSession = aiohttp.ClientSession()
+        self.session: aiohttp.ClientSession = aiohttp.ClientSession(
+        #    headers={
+        #    'Content-Type': 'application/json'
+        #}
+        )
         self.poller = Poller(token, self.queue, self.session)
         self.worker = Worker(token, self.queue, n, self.session, self._handle_update)
         self.api_url = "https://" + api_url + "/bot"
@@ -94,7 +100,7 @@ class Bot:
                 logging.error("Unknown update type: %s" % list(update.keys())[1])
             await asyncio.gather(*tasks)
         except Exception as e:
-            print("ERROR: ", e)
+            traceback.print_exc()
 
     async def onMessage(self, update):
         pass
@@ -153,19 +159,66 @@ class Bot:
     async def make_request(self, method, data):
         async with self.session.post(self.api_url + self.token + "/" + method, data=data) as post:
             a = await post.json()
-            print(a)
+            print(data, a)
             return a
 
-    async def send_message(self, chat_id: int, text: str, extra: dict = {}):
+    async def send_message(
+            self,
+            chat_id: int,
+            text: str,
+            message_thread_id: Union[int, None] = None,
+            parse_mode: Union[str, None] = "HTML",
+            entities: Union[List, None] = None,
+            disable_web_page_preview: Union[bool, None] = None,
+            disable_notification: Union[bool, None] = None,
+            protect_content: Union[bool, None] = None,
+            reply_to_message_id: Union[int, None] = None,
+            allow_sending_without_reply: Union[bool, None] = None,
+            reply_markup: Union[dict, None] = None
+    ):
         payload = {
             "chat_id": chat_id,
             "text": text
         }
-        payload |= extra
+        if message_thread_id is not None:
+            payload["message_thread_id"] = message_thread_id
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
+        if disable_web_page_preview is not None:
+            payload["disable_web_page_preview"] = disable_web_page_preview
+        if disable_notification is not None:
+            payload["disable_notification"] = disable_notification
+        if entities is not None:
+            payload["entities"] = entities
+        if protect_content is not None:
+            payload["protect_content"] = protect_content
+        if reply_to_message_id is not None:
+            payload["reply_to_message_id"] = reply_to_message_id
+        if allow_sending_without_reply is not None:
+            payload["allow_sending_without_reply"] = allow_sending_without_reply
+        if reply_markup is not None:
+            payload["reply_markup"] = json.dumps(reply_markup)
+        print(payload)
         await self.make_request(
             "sendMessage",
             payload
         )
+
+    # async def send_message(self, chat_id: int, text: str, extra: dict = {}):
+    #     payload = {
+    #         "chat_id": chat_id,
+    #         "text": text
+    #     }
+    #     logging.debug(text)
+    #     payload |= extra
+    #     if "parse_mode" not in payload:
+    #         payload["parse_mode"] = "HTML"
+    #     result = await self.make_request(
+    #         "sendMessage",
+    #         payload
+    #     )
+    #     if result["ok"]:
+    #         return convert_dict(result["result"], "message")
 
     async def answer_callback_query(
             self,
@@ -195,7 +248,7 @@ class Bot:
             chat_id: Union[int, str, None] = None,
             message_id: Union[int, None] = None,
             inline_message_id: Union[int, None] = None,
-            parse_mode: Union[str, None] = None,
+            parse_mode: Union[str, None] = "HTML",
             entities: Union[List, None] = None,
             disable_web_page_preview: Union[bool, None] = None,
             reply_markup: Union[dict, None] = None
@@ -216,7 +269,7 @@ class Bot:
         if disable_web_page_preview is not None:
             payload["disable_web_page_preview"] = disable_web_page_preview
         if reply_markup is not None:
-            payload["reply_markup"] = reply_markup
+            payload["reply_markup"] = json.dumps(reply_markup)
         await self.make_request(
             "editMessageText",
             payload

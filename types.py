@@ -9,7 +9,7 @@ def convert_dict(d: dict, typeof: str):
             date=d["date"],
             chat=convert_dict(d["chat"], "chat"),
             message_thread_id=d["message_thread_id"] if "message_thread_id" in d else None,
-            from_user=d["from_user"] if "from_user" in d else None,
+            from_user=d["from"] if "from" in d else None,
             sender_chat=convert_dict(d["sender_chat"], "chat") if "sender_chat" in d else None,
             forward_from=d["forward_from"] if "forward_from" in d else None,
             forward_from_chat=d["forward_from_chat"] if "forward_from_chat" in d else None,

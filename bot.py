@@ -4,7 +4,7 @@ import logging
 import traceback
 import json
 from typing import Union, List
-from .types import convert_dict
+from .types import Handlers, convert_dict, BaseModule
 
 
 class Poller:
@@ -70,79 +70,59 @@ class Bot:
     # this function is a decorator, that's why it is so strange
     def register(self, method):
         def a(func, preserved=self):
-            setattr(preserved, method, func)
+            setattr(preserved, method, getattr(preserved, method) + [func])
             return func
         return a
+
+    def load_module(self, module):
+        for i in module.get_funcs():
+            self.register(i[1])(i[0])
 
     async def _handle_update(self, update: dict):
         try:
             tasks = []
             if "message" in update:
                 print(update)
-                tasks.append(self.onMessage(convert_dict(update["message"], "message")))
-                tasks.append(self.onMessageOnly(convert_dict(update["message"], "message")))
+                tasks += [func(convert_dict(update["message"], "message")) for func in self.onMessage]
+                tasks += [func(convert_dict(update["message"], "message")) for func in self.onMessageOnly]
             elif "edited_message" in update:
-                tasks.append(self.onMessage(convert_dict(update["edited_message"], "message")))
-                tasks.append(self.onEditedMessage(convert_dict(update["edited_message"], "message")))
+                tasks += [func(convert_dict(update["edited_message"], "message")) for func in self.onMessage]
+                tasks += [func(convert_dict(update["edited_message"], "message")) for func in self.onEditedMessage]
             elif "channel_post" in update:
-                tasks.append(self.onMessage(convert_dict(update["channel_post"], "message")))
-                tasks.append(self.onChannelPost(convert_dict(update["channel_post"], "message")))
+                tasks += [func(convert_dict(update["channel_post"], "message")) for func in self.onMessage]
+                tasks += [func(convert_dict(update["channel_post"], "message")) for func in self.onChannelPost]
             elif "edited_channel_post" in update:
-                tasks.append(self.onMessage(convert_dict(update["edited_channel_post"], "message")))
-                tasks.append(self.onEditedChannelPost(convert_dict(update["edited_channel_post"], "message")))
+                tasks += [func(convert_dict(update["edited_channel_post"], "message")) for func in self.onMessage]
+                tasks += [func(convert_dict(update["edited_channel_post"], "message")) for func in self.onEditedChannelPost]
             elif "inline_query" in update:
-                tasks.append(self.onInlineQuery(update["inline_query"]))
+                tasks += [func(update["inline_query"]) for func in self.onInlineQuery]
             elif "chosen_inline_result" in update:
-                tasks.append(self.onChosenInlineResult(update["chosen_inline_result"]))
+                tasks += [func(update["chosen_inline_result"]) for func in self.onChosenInlineResult]
             elif "callback_query" in update:
-                tasks.append(self.onCallbackQuery(convert_dict(update["callback_query"], "callback_query")))
+                tasks += [func(convert_dict(update["callback_query"], "callback_query")) for func in self.onCallbackQuery]
             else:
-                logging.error("Unknown update type: %s" % list(update.keys())[1])
+                logging.error("Unknown update type: %s" % lsit(update.keys())[1])
+            tasks += [func(update) for func in self.onRaw]
+            
             await asyncio.gather(*tasks)
         except Exception as e:
             traceback.print_exc()
 
-    async def onMessage(self, update):
-        pass
-
-    async def onEditedMessage(self, update):
-        pass
-
-    async def onEditedChannelPost(self, update):
-        pass
-
-    async def onChannelPost(self, update):
-        pass
-
-    async def onMessageOnly(self, update):
-        pass
-
-    async def onInlineQuery(self, update):
-        pass
-
-    async def onChosenInlineResult(self, update):
-        pass
-
-    async def onCallbackQuery(self, update):
-        pass
-
-    async def onShippingQuery(self, update):
-        pass
-
-    async def onPreCheckoutQuery(self, update):
-        pass
-
-    async def onPoll(self, update):
-        pass
-
-    async def onPollAnswer(self, update):
-        pass
-
-    async def onChatMemberUpdated(self, update):
-        pass
-
-    async def onChatJoinRequest(self, update):
-        pass
+    onMessageOnly = []
+    onMessage = []
+    onEditedMessage = []
+    onEditedChannelPost = []
+    onChannelPost = []
+    onInlineQuery = []
+    onChosenInlineResult = []
+    onCallbackQuery = []
+    onShippingQuery = []
+    onPreCheckoutQuery = []
+    onPoll = []
+    onPollAnswer = []
+    onChatMemberUpdated = []
+    onChatJoinRequest = []
+    onRaw = []  # just in case
 
     async def start(self):
         await self.poller.start()
@@ -159,7 +139,11 @@ class Bot:
     async def make_request(self, method, data):
         async with self.session.post(self.api_url + self.token + "/" + method, data=data) as post:
             a = await post.json()
-            print(data, a)
+            if a["ok"] is False and "parameters" in a and "retry_after" in a["parameters"]:
+                await asyncio.sleep(a["parameters"]["retry_after"]+1)
+                print("TOO MANY REQUESTS CATCHED")
+                return await self.make_request(method, data)
+            # print(data, a)
             return a
 
     async def send_message(
@@ -198,11 +182,15 @@ class Bot:
             payload["allow_sending_without_reply"] = allow_sending_without_reply
         if reply_markup is not None:
             payload["reply_markup"] = json.dumps(reply_markup)
-        print(payload)
-        await self.make_request(
+        # print(payload)
+        result = await self.make_request(
             "sendMessage",
             payload
         )
+        if result["ok"] is True:
+            return convert_dict(result["result"], "message")
+        else:
+            return None
 
     # async def send_message(self, chat_id: int, text: str, extra: dict = {}):
     #     payload = {

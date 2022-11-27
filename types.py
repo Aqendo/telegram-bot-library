@@ -18,6 +18,7 @@ def convert_dict(d: dict, typeof: str):
             via_bot=convert_dict(d["via_bot"], "user") if "via_bot" in d else None,
             text=d["text"] if "text" in d else None,
             reply_markup=d["reply_markup"] if "reply_markup" in d else None,
+            caption_entities=d["caption_entities"] if "caption_entities" in d else None
         )
     elif typeof == "chat":
         return Chat(

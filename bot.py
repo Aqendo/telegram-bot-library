@@ -4,7 +4,7 @@ import logging
 import traceback
 import json
 from typing import Any, Union, List
-from .types import Handlers, convert_dict, BaseModule
+from .types import convert_dict
 
 
 class Poller:
@@ -85,6 +85,25 @@ class Bot:
         for i in module.get_funcs():
             self.register(i[1])(i[0])
 
+    def apply_entities(self, text: str, entities: list):
+        raise NotImplemented # It doesn't work well for now.
+        print("TEXT", text)
+        print("ENTITIES", entities)
+        for i in entities:
+            entity_type = i["type"]
+            length = i["length"]
+            offset = i["offset"]
+            tags = ("","")
+            if entity_type == "bold":
+                tags = ("<b>", "</b>")
+            elif entity_type == "code":
+                tags = ("<code>", "</code>")
+            text = text[:offset] \
+            + tags[0] \
+            + text[offset:offset+length] \
+            + tags[1] \
+            + text[offset+length:]
+        return text
     async def _handle_update(self, update: dict):
         try:
             tasks = []
@@ -204,7 +223,7 @@ class Bot:
             chat_id: int,
             text: str,
             message_thread_id: Union[int, None] = None,
-            parse_mode: Union[str, None] = "HTML",
+            parse_mode: Union[str, None] = None,
             entities: Union[List, None] = None,
             disable_web_page_preview: Union[bool, None] = None,
             disable_notification: Union[bool, None] = None,
@@ -219,14 +238,17 @@ class Bot:
         }
         if message_thread_id is not None:
             payload["message_thread_id"] = message_thread_id
-        if parse_mode is not None:
+        if parse_mode is None:
+            if entities is None:
+                payload["parse_mode"] = "HTML"
+        else:
             payload["parse_mode"] = parse_mode
         if disable_web_page_preview is not None:
             payload["disable_web_page_preview"] = disable_web_page_preview
         if disable_notification is not None:
             payload["disable_notification"] = disable_notification
         if entities is not None:
-            payload["entities"] = entities
+            payload["entities"] = json.dumps(entities)
         if protect_content is not None:
             payload["protect_content"] = protect_content
         if reply_to_message_id is not None:

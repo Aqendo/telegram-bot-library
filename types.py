@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import Union
 
-
 def convert_dict(d: dict, typeof: str):
     if typeof == "message":
         return Message(
@@ -18,7 +17,7 @@ def convert_dict(d: dict, typeof: str):
             via_bot=convert_dict(d["via_bot"], "user") if "via_bot" in d else None,
             text=d["text"] if "text" in d else None,
             reply_markup=d["reply_markup"] if "reply_markup" in d else None,
-            caption_entities=d["caption_entities"] if "caption_entities" in d else None
+            entities=d["entities"] if "entities" in d else None
         )
     elif typeof == "chat":
         return Chat(
@@ -149,7 +148,8 @@ class Message(BaseType):
             reply_to_message: Union[dict, None] = None,
             via_bot: Union[dict, None] = None,
             text: Union[str, None] = None,
-            reply_markup: Union[dict, None] = None
+            reply_markup: Union[dict, None] = None,
+            entities: Union[list, None] = None
     ):
         self.message_id = message_id
         self.date = date
@@ -164,6 +164,7 @@ class Message(BaseType):
         self.via_bot = via_bot
         self.text = text
         self.reply_markup = reply_markup
+        self.entities = entities
 
 
 class CallbackQuery(BaseType):

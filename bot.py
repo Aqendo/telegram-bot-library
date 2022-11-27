@@ -5,6 +5,7 @@ import traceback
 import json
 from typing import Union, List
 from .types import Handlers, convert_dict, BaseModule
+from functools import wraps, partial
 
 
 class Poller:
@@ -66,6 +67,10 @@ class Bot:
         self.poller = Poller(token, self.queue, self.session)
         self.worker = Worker(token, self.queue, n, self.session, self._handle_update)
         self.api_url = "https://" + api_url + "/bot"
+    
+    # We should close the connection of aiohttp to prevent memory leaks
+    def __del__(self):
+        asyncio.run(self.session.close())
 
     # this function is a decorator, that's why it is so strange
     def register(self, method):
@@ -78,6 +83,15 @@ class Bot:
         for i in module.get_funcs():
             self.register(i[1])(i[0])
 
+    def wrap(self, func):
+        @wraps(func)
+        async def run(*args, loop=None, executor=None, **kwargs):
+            if loop is None:
+                loop = asyncio.get_event_loop()
+            pfunc = partial(func, *args, **kwargs)
+            return await loop.run_in_executor(executor, pfunc)
+        return run
+    
     async def _handle_update(self, update: dict):
         try:
             tasks = []
@@ -145,6 +159,19 @@ class Bot:
                 return await self.make_request(method, data)
             # print(data, a)
             return a
+
+    async def send_document(
+            self,
+            document,
+            chat_id
+    ):
+        data = aiohttp.FormData(quote_fields=False)
+        data.add_field("chat_id", str(chat_id))
+        data.add_field("document", document)
+        await self.make_request(
+            "sendDocument",
+            data
+        )
 
     async def send_message(
             self,

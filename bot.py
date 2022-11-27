@@ -3,17 +3,17 @@ import asyncio
 import logging
 import traceback
 import json
-from typing import Union, List
+from typing import Any, Union, List
 from .types import Handlers, convert_dict, BaseModule
-from functools import wraps, partial
 
 
 class Poller:
-    def __init__(self, token, queue: asyncio.Queue, session, api_url: Union[str, None] = "api.telegram.org"):
+    def __init__(self, token, queue: asyncio.Queue, session, api_url: Union[str, None] = "api.telegram.org", skip_updates: bool = False):
         self.queue = queue
         self.token = token
         self.session = session
         self.api_url = "https://" + api_url + "/bot"
+        self.skip_updates = skip_updates
 
     async def make_request(self, method, data):
         async with self.session.post(self.api_url + self.token + "/" + method, data=data) as post:
@@ -21,23 +21,26 @@ class Poller:
             logging.debug(a)
             return a
 
-    async def _worker(self):
+    async def _worker(self, skip_updates: bool):
         offset = -1
+        to_skip = skip_updates
         while True:
             res = await self.make_request("getUpdates", {"offset": offset})
             for i in res['result']:
                 offset = i['update_id'] + 1
+                if to_skip: continue
                 self.queue.put_nowait(i)
+            to_skip = False
 
     async def start(self):
-        asyncio.create_task(self._worker())
+        asyncio.create_task(self._worker(self.skip_updates))
 
 
 class Worker:
-    def __init__(self, token: str, queue: asyncio.Queue, concurrent_workers: int, session, handle_update):
+    def __init__(self, token: str, queue: asyncio.Queue, workers_amount: int, session, handle_update):
         self.token = token
         self.queue = queue
-        self.concurrent_workers = concurrent_workers
+        self.workers_amount = workers_amount
         self.session = session
         self.handle_update = handle_update
 
@@ -49,12 +52,12 @@ class Worker:
             await self.handle_update(upd)
 
     async def start(self):
-        for _ in range(self.concurrent_workers):
+        for _ in range(self.workers_amount):
             asyncio.create_task(self._worker())
 
 
 class Bot:
-    def __init__(self, token: str, n: int, api_url: Union[str, None] = "api.telegram.org", skip_updates: bool = True):
+    def __init__(self, token: str, n: int, api_url: Union[str, None] = "api.telegram.org", skip_updates: bool = False):
         self.queue = asyncio.Queue()
         if not isinstance(token, str) or len(token) == 0:
             raise ValueError("A valid token must be provided.")
@@ -64,14 +67,13 @@ class Bot:
         #    'Content-Type': 'application/json'
         #}
         )
-        self.poller = Poller(token, self.queue, self.session)
+        self.poller = Poller(token, self.queue, self.session, skip_updates=skip_updates)
         self.worker = Worker(token, self.queue, n, self.session, self._handle_update)
         self.api_url = "https://" + api_url + "/bot"
-    
-    # We should close the connection of aiohttp to prevent memory leaks
+
     def __del__(self):
         asyncio.run(self.session.close())
-
+        
     # this function is a decorator, that's why it is so strange
     def register(self, method):
         def a(func, preserved=self):
@@ -83,15 +85,6 @@ class Bot:
         for i in module.get_funcs():
             self.register(i[1])(i[0])
 
-    def wrap(self, func):
-        @wraps(func)
-        async def run(*args, loop=None, executor=None, **kwargs):
-            if loop is None:
-                loop = asyncio.get_event_loop()
-            pfunc = partial(func, *args, **kwargs)
-            return await loop.run_in_executor(executor, pfunc)
-        return run
-    
     async def _handle_update(self, update: dict):
         try:
             tasks = []
@@ -114,10 +107,8 @@ class Bot:
                 tasks += [func(update["chosen_inline_result"]) for func in self.onChosenInlineResult]
             elif "callback_query" in update:
                 tasks += [func(convert_dict(update["callback_query"], "callback_query")) for func in self.onCallbackQuery]
-            else:
-                logging.error("Unknown update type: %s" % lsit(update.keys())[1])
             tasks += [func(update) for func in self.onRaw]
-            
+            logging.error("Unknown update type: %s" % list(update.keys())[1])
             await asyncio.gather(*tasks)
         except Exception as e:
             traceback.print_exc()
@@ -155,24 +146,59 @@ class Bot:
             a = await post.json()
             if a["ok"] is False and "parameters" in a and "retry_after" in a["parameters"]:
                 await asyncio.sleep(a["parameters"]["retry_after"]+1)
-                print("TOO MANY REQUESTS CATCHED")
+                logging.DEBUG("TOO MANY REQUESTS CATCHED")
                 return await self.make_request(method, data)
-            # print(data, a)
+            logging.debug([data, a])
             return a
-
+        
     async def send_document(
             self,
-            document,
-            chat_id
+            chat_id: Union[str, int],
+            document: Any,
+            message_thread_id: Union[int, None] = None,
+            thumb: Any = None,
+            caption: Union[str, None] = None,
+            parse_mode: Union[str, None] = None,
+            caption_entities: Union[list, None] = None,
+            disable_content_type_detection: Union[bool, None] = None,
+            disable_notification: Union[bool, None] = None,
+            protect_content: Union[bool, None] = None,
+            reply_to_message_id: Union[int, None] = None,
+            allow_sending_without_reply: Union[bool, None] = None,
+            reply_markup: Union[str, None] = None
     ):
         data = aiohttp.FormData(quote_fields=False)
-        data.add_field("chat_id", str(chat_id))
+        if chat_id:
+            data.add_field("chat_id", chat_id and str(chat_id))
+        if message_thread_id:
+            data.add_field("message_thread_id", message_thread_id)
+        if caption:
+            data.add_field("caption", chat_id)
+        if caption_entities:
+            data.add_field("caption_entities", json.dumps(caption_entities))
+        if disable_content_type_detection:
+            data.add_field("disable_content_type_detection", json.dumps(disable_content_type_detection))
+        if disable_notification:
+            data.add_field("disable_notification", json.dumps(disable_notification))
+        if disable_content_type_detection:
+            data.add_field("disable_content_type_detection", json.dumps(disable_content_type_detection))
+        if protect_content:
+            data.add_field("protect_content", json.dumps(protect_content))
+        if reply_to_message_id:
+            data.add_field("reply_to_message_id", str(reply_to_message_id))
+        if allow_sending_without_reply:
+            data.add_field("allow_sending_without_reply", json.dumps(allow_sending_without_reply))
+        if reply_markup:
+            data.add_field("reply_markup", json.dumps(reply_markup))
+        data.add_field("parse_mode", parse_mode or "HTML")
         data.add_field("document", document)
-        await self.make_request(
+        if thumb:
+            data.add_field("thumblike", thumb)
+            data.add_field("thumb", "attach://thumblike") # I haven't tested it yet.
+        return await self.make_request(
             "sendDocument",
             data
         )
-
     async def send_message(
             self,
             chat_id: int,
@@ -209,15 +235,11 @@ class Bot:
             payload["allow_sending_without_reply"] = allow_sending_without_reply
         if reply_markup is not None:
             payload["reply_markup"] = json.dumps(reply_markup)
-        # print(payload)
-        result = await self.make_request(
+        print(payload)
+        print(await self.make_request(
             "sendMessage",
             payload
-        )
-        if result["ok"] is True:
-            return convert_dict(result["result"], "message")
-        else:
-            return None
+        ))
 
     # async def send_message(self, chat_id: int, text: str, extra: dict = {}):
     #     payload = {

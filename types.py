@@ -1,6 +1,25 @@
 from enum import Enum
 from typing import Union
 
+class Handlers():
+    onMessage = "onMessage"
+    onEditedMessage = "onEditedMessage"
+    onEditedChannelPost = "onEditedChannelPost"
+    onChannelPost = "onChannelPost"
+    onMessageOnly = "onMessageOnly"
+    onInlineQuery = "onInlineQuery"
+    onChosenInlineResult = "onChosenInlineResult"
+    onCallbackQuery = "onCallbackQuery"
+    onShippingQuery = "onShippingQuery"
+    onPreCheckoutQuery = "onPreCheckoutQuery"
+    onPoll = "onPoll"
+    onPollAnswer = "onPollAnswer"
+    onChatMemberUpdated = "onChatMemberUpdated"
+    onChatJoinRequest = "onChatJoinRequest"
+
+
+# TYPES OF TELEGRAM OBJECTS
+
 def convert_dict(d: dict, typeof: str):
     if typeof == "message":
         return Message(
@@ -54,38 +73,10 @@ def convert_dict(d: dict, typeof: str):
         )
     return d
 
-
-class Handlers():
-    onMessage = "onMessage"
-    onEditedMessage = "onEditedMessage"
-    onEditedChannelPost = "onEditedChannelPost"
-    onChannelPost = "onChannelPost"
-    onMessageOnly = "onMessageOnly"
-    onInlineQuery = "onInlineQuery"
-    onChosenInlineResult = "onChosenInlineResult"
-    onCallbackQuery = "onCallbackQuery"
-    onShippingQuery = "onShippingQuery"
-    onPreCheckoutQuery = "onPreCheckoutQuery"
-    onPoll = "onPoll"
-    onPollAnswer = "onPollAnswer"
-    onChatMemberUpdated = "onChatMemberUpdated"
-    onChatJoinRequest = "onChatJoinRequest"
-
-
-# TYPES OF TELEGRAM OBJECTS
-
 class BaseType:
     def __repr__(self):
         fields = tuple("{}={}".format(k, v) for k, v in self.__dict__.items())
         return self.__class__.__name__ + str(tuple(sorted(fields))).replace("\'", "")
-
-
-class BaseModule:
-    def __init__(self, bot):
-        self.bot = bot
-
-    def get_funcs(self):
-        return []
 
 
 class User(BaseType):

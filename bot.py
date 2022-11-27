@@ -25,13 +25,15 @@ class Poller:
         offset = -1
         to_skip = skip_updates
         while True:
-            res = await self.make_request("getUpdates", {"offset": offset})
-            for i in res['result']:
-                offset = i['update_id'] + 1
-                if to_skip: continue
-                self.queue.put_nowait(i)
-            to_skip = False
-
+            try:
+                res = await self.make_request("getUpdates", {"offset": offset})
+                for i in res['result']:
+                    offset = i['update_id'] + 1
+                    if to_skip: continue
+                    self.queue.put_nowait(i)
+                to_skip = False
+            except Exception as e:
+                traceback.print_exc()
     async def start(self):
         asyncio.create_task(self._worker(self.skip_updates))
 

@@ -64,11 +64,7 @@ class Bot:
         if not isinstance(token, str) or len(token) == 0:
             raise ValueError("A valid token must be provided.")
         self.token = token
-        self.session: aiohttp.ClientSession = aiohttp.ClientSession(
-        #    headers={
-        #    'Content-Type': 'application/json'
-        #}
-        )
+        self.session: aiohttp.ClientSession = aiohttp.ClientSession()
         self.poller = Poller(token, self.queue, self.session, skip_updates=skip_updates)
         self.worker = Worker(token, self.queue, n, self.session, self._handle_update)
         self.api_url = "https://" + api_url + "/bot"
@@ -128,8 +124,9 @@ class Bot:
                 tasks += [func(update["chosen_inline_result"]) for func in self.onChosenInlineResult]
             elif "callback_query" in update:
                 tasks += [func(convert_dict(update["callback_query"], "callback_query")) for func in self.onCallbackQuery]
+            else:
+                logging.error("Unknown update type: %s" % list(update.keys())[1])
             tasks += [func(update) for func in self.onRaw]
-            logging.error("Unknown update type: %s" % list(update.keys())[1])
             await asyncio.gather(*tasks)
         except Exception as e:
             traceback.print_exc()
@@ -167,7 +164,7 @@ class Bot:
             a = await post.json()
             if a["ok"] is False and "parameters" in a and "retry_after" in a["parameters"]:
                 await asyncio.sleep(a["parameters"]["retry_after"]+1)
-                logging.DEBUG("TOO MANY REQUESTS CATCHED")
+                logging.debug("TOO MANY REQUESTS CATCHED")
                 return await self.make_request(method, data)
             logging.debug([data, a])
             return a

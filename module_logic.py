@@ -1,8 +1,20 @@
-from .bot import Bot
+from abc import ABC, abstractmethod
 
-class BaseModule:
-    def __init__(self, bot: Bot):
-        self.bot = bot
 
+class BaseModule(ABC):
+    @abstractmethod
     def get_funcs(self):
-        return []
+        """
+        You need to specify functions
+        and their handler types for
+        bot to understand them.
+
+        Example:
+
+        return [
+            [
+                self.some_function_message,
+                types.Handlers.onMessage
+            ]
+        ]
+        """

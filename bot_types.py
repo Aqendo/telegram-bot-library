@@ -43,8 +43,12 @@ def convert_dict(d: dict, typeof: str):
             forward_from_message_id=d["forward_from_message_id"]
             if "forward_from_message_id" in d
             else None,
-            reply_to_message=d["reply_to_message"] if "reply_to_message" in d else None,
-            via_bot=convert_dict(d["via_bot"], "user") if "via_bot" in d else None,
+            reply_to_message=d["reply_to_message"]
+            if "reply_to_message" in d
+            else None,
+            via_bot=convert_dict(d["via_bot"], "user")
+            if "via_bot" in d
+            else None,
             text=d["text"] if "text" in d else None,
             reply_markup=d["reply_markup"] if "reply_markup" in d else None,
             entities=d["entities"] if "entities" in d else None,
@@ -63,12 +67,16 @@ def convert_dict(d: dict, typeof: str):
             id=d["id"],
             from_user=convert_dict(d["from"], "user"),  # class User
             chat_instance=d["chat_instance"],
-            message=convert_dict(d["message"], "message") if "message" in d else None,
+            message=convert_dict(d["message"], "message")
+            if "message" in d
+            else None,
             inline_message_id=d["inline_message_id"]
             if "inline_message_id" in d
             else None,
             data=d["data"] if "data" in d else None,
-            game_short_name=d["game_short_name"] if "game_short_name" in d else None,
+            game_short_name=d["game_short_name"]
+            if "game_short_name" in d
+            else None,
         )
     elif typeof == "user":
         return User(
@@ -82,7 +90,9 @@ def convert_dict(d: dict, typeof: str):
             added_to_attachment_menu=d["added_to_attachment_menu"]
             if "added_to_attachment_menu" in d
             else None,
-            can_join_groups=d["can_join_groups"] if "can_join_groups" in d else None,
+            can_join_groups=d["can_join_groups"]
+            if "can_join_groups" in d
+            else None,
             can_read_all_group_messages=d["can_read_all_group_messages"]
             if "can_read_all_group_messages" in d
             else None,
@@ -96,7 +106,9 @@ def convert_dict(d: dict, typeof: str):
 class BaseType:
     def __repr__(self):
         fields = tuple("{}={}".format(k, v) for k, v in self.__dict__.items())
-        return self.__class__.__name__ + str(tuple(sorted(fields))).replace("'", "")
+        return self.__class__.__name__ + str(tuple(sorted(fields))).replace(
+            "'", ""
+        )
 
 
 class User(BaseType):
